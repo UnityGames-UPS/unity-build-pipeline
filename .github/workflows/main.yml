@@ -19,7 +19,7 @@ jobs:
       # Step 2: Sync build folder to S3
       - name: Upload Build to S3
         run: |
-          aws s3 sync . s3://game-builds-staging/${{ inputs.s3_folder }}/ \
+          aws s3 sync . s3://unity.build-dev/${{ inputs.s3_folder }}/ \
             --delete \
             --cache-control "no-cache" \
             --exclude "*" \
