@@ -1,0 +1,27 @@
+name: Upload Build to S3
+
+on:
+  workflow_call:
+    inputs:
+      s3_folder:
+        required: true
+        type: string   
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      # Step 1: Checkout the calling repository (the game repo)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Sync build folder to S3
+      - name: Upload Build to S3
+        run: |
+          aws s3 sync . s3://game-builds-staging/${{ inputs.s3_folder }}/ \
+            --delete \
+            --cache-control "no-cache" \
+            --exclude "*" \
+            --include "Build/*" \
+            --include "index.html"
