@@ -19,28 +19,28 @@ jobs:
         run: |
           aws s3 cp Build/Build.loader.js \
             s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.loader.js \
-            --cache-control "public, max-age=86400, must-revalidate" \
+            --cache-control "no-cache" \
             --content-type "application/javascript"
 
       - name: Upload Build.framework.js.unityweb with metadata
         run: |
           aws s3 cp Build/Build.framework.js.unityweb \
             s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb \
-            --cache-control "public, max-age=86400, must-revalidate" \
+            --cache-control "no-cache" \
             --content-type "application/javascript" 
 
       - name: Upload Build.data.unityweb with metadata
         run: |
           aws s3 cp Build/Build.data.unityweb \
             s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.data.unityweb \
-            --cache-control "public, max-age=86400, must-revalidate" \
+            --cache-control "no-cache" \
             --content-type "application/octet-stream" 
 
       - name: Upload Build.wasm.unityweb with metadata
         run: |
           aws s3 cp Build/Build.wasm.unityweb \
             s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb \
-            --cache-control "public, max-age=86400, must-revalidate" \
+            --cache-control "no-cache" \
             --content-type "application/wasm" 
 
       - name: Upload index.html
