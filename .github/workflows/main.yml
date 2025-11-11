@@ -5,23 +5,50 @@ on:
     inputs:
       s3_folder:
         required: true
-        type: string   
+        type: string
 
 jobs:
   deploy:
     runs-on: self-hosted
 
     steps:
-      # Step 1: Checkout the calling repository (the game repo)
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Sync build folder to S3
-      - name: Upload Build to S3
+      - name: Upload Build.loader.js with metadata
         run: |
-          aws s3 sync . s3://unity.build-dev/${{ inputs.s3_folder }}/ \
-            --delete \
+          aws s3 cp Build/Build.loader.js \
+            s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.loader.js \
+            --cache-control "public, max-age=31536000, immutable" \
+            --content-type "application/javascript"
+
+      - name: Upload Build.framework.js.unityweb with metadata
+        run: |
+          aws s3 cp Build/Build.framework.js.unityweb \
+            s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb \
+            --cache-control "public, max-age=31536000, immutable" \
+            --content-type "application/javascript" \
+            --content-encoding "gzip"
+
+      - name: Upload Build.data.unityweb with metadata
+        run: |
+          aws s3 cp Build/Build.data.unityweb \
+            s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.data.unityweb \
+            --cache-control "public, max-age=31536000, immutable" \
+            --content-type "application/octet-stream" \
+            --content-encoding "gzip"
+
+      - name: Upload Build.wasm.unityweb with metadata
+        run: |
+          aws s3 cp Build/Build.wasm.unityweb \
+            s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb \
+            --cache-control "public, max-age=31536000, immutable" \
+            --content-type "application/wasm" \
+            --content-encoding "gzip"
+
+      - name: Upload index.html
+        run: |
+          aws s3 cp index.html \
+            s3://unity.build-dev/${{ inputs.s3_folder }}/index.html \
             --cache-control "no-cache" \
-            --exclude "*" \
-            --include "Build/*" \
-            --include "index.html"
+            --content-type "text/html"
