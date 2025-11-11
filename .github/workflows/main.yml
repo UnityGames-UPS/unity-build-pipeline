@@ -19,12 +19,14 @@ jobs:
         run: |
           aws s3 cp Build/Build.loader.js \
             s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.loader.js \
+            --cache-control "no-cache" \
             --content-type "application/javascript"
 
       - name: Upload Build.framework.js.unityweb with metadata
         run: |
           aws s3 cp Build/Build.framework.js.unityweb \
             s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb \
+            --cache-control "no-cache" \
             --content-type "application/javascript" \
             --content-encoding br
 
@@ -32,6 +34,7 @@ jobs:
         run: |
           aws s3 cp Build/Build.data.unityweb \
             s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.data.unityweb \
+            --cache-control "no-cache" \
             --content-type "application/octet-stream" \
             --content-encoding br
 
@@ -39,6 +42,7 @@ jobs:
         run: |
           aws s3 cp Build/Build.wasm.unityweb \
             s3://unity.build-dev/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb \
+            --cache-control "no-cache" \
             --content-type "application/wasm" \
             --content-encoding br
 
@@ -46,4 +50,5 @@ jobs:
         run: |
           aws s3 cp index.html \
             s3://unity.build-dev/${{ inputs.s3_folder }}/index.html \
+            --cache-control "no-cache" \
             --content-type "text/html"
