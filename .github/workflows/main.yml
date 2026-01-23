@@ -9,6 +9,12 @@ on:
       s3_folder:
         required: true
         type: string
+      cloudfront_distribution_id:
+        required: true
+        type: string
+      invalidate_paths:
+        required: true
+        type: string
 
 jobs:
   deploy:
@@ -55,3 +61,9 @@ jobs:
             s3://unity.build-dev/${{ inputs.s3_folder }}/index.html \
             --cache-control "no-cache" \
             --content-type "text/html"
+
+      - name: CloudFront Invalidation
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ inputs.cloudfront_distribution_id }} \
+            --paths ${{ inputs.invalidate_paths }}     
