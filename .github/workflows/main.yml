@@ -58,7 +58,7 @@ jobs:
       - name: Upload index.html
         run: |
           aws s3 cp index.html \
-            s3://unity.build-dev/${{ inputs.s3_folder }}/index.html \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/index.html \
             --cache-control "no-cache" \
             --content-type "text/html"
 
