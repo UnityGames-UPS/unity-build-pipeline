@@ -3,12 +3,9 @@ name: Upload Build to S3
 on:
   workflow_call:
     inputs:
-      version:
-        required: true
-        type: string
       s3_bucket:
-        required: true
-        type: string
+         required: true
+         type: string
       s3_folder:
         required: true
         type: string
@@ -24,67 +21,49 @@ jobs:
     runs-on: self-hosted
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set version variable
-      run: |
-        echo "VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+      - name: Upload Build.loader.js with metadata
+        run: |
+          aws s3 cp Build/Build.loader.js \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.loader.js \
+            --cache-control "public, max-age=120, must-revalidate" \
+            --content-type "application/javascript"
 
-    - name: Rename build files with version
-      run: |
-        mv Build/Build.loader.js Build/Build.loader.$VERSION.js
-        mv Build/Build.framework.js.unityweb Build/Build.framework.$VERSION.unityweb
-        mv Build/Build.data.unityweb Build/Build.data.$VERSION.unityweb
-        mv Build/Build.wasm.unityweb Build/Build.wasm.$VERSION.unityweb
+      - name: Upload Build.framework.js.unityweb with metadata
+        run: |
+          aws s3 cp Build/Build.framework.js.unityweb \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb \
+            --cache-control "public, max-age=120, must-revalidate" \
+            --content-type "application/javascript" \
+            --content-encoding br
 
-    - name: Rewrite index.html to use versioned files
-      run: |
-        sed -i "s/Build.loader.js/Build.loader.$VERSION.js/g" index.html
-        sed -i "s/Build.framework.js.unityweb/Build.framework.$VERSION.unityweb/g" index.html
-        sed -i "s/Build.data.unityweb/Build.data.$VERSION.unityweb/g" index.html
-        sed -i "s/Build.wasm.unityweb/Build.wasm.$VERSION.unityweb/g" index.html
+      - name: Upload Build.data.unityweb with metadata
+        run: |
+          aws s3 cp Build/Build.data.unityweb \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.data.unityweb \
+            --cache-control "public, max-age=120, must-revalidate" \
+            --content-type "application/octet-stream" \
+            --content-encoding br
 
-    - name: Upload Build.loader.js with metadata
-      run: |
-        aws s3 cp Build/Build.loader.$VERSION.js \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.loader.$VERSION.js \
-          --cache-control "public, max-age=86400, must-revalidate" \
-          --content-type "application/javascript"
+      - name: Upload Build.wasm.unityweb with metadata
+        run: |
+          aws s3 cp Build/Build.wasm.unityweb \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb \
+            --cache-control "public, max-age=120, must-revalidate" \
+            --content-type "application/wasm" \
+            --content-encoding br
 
-    - name: Upload Build.framework.js.unityweb with metadata
-      run: |
-        aws s3 cp Build/Build.framework.$VERSION.unityweb \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.framework.$VERSION.unityweb \
-          --cache-control "public, max-age=86400, must-revalidate" \
-          --content-type "application/javascript" \
-          --content-encoding br
+      - name: Upload index.html
+        run: |
+          aws s3 cp index.html \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/index.html \
+            --cache-control "no-cache" \
+            --content-type "text/html"
 
-    - name: Upload Build.data.unityweb with metadata
-      run: |
-        aws s3 cp Build/Build.data.$VERSION.unityweb \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.data.$VERSION.unityweb \
-          --cache-control "public, max-age=86400, must-revalidate" \
-          --content-type "application/octet-stream" \
-          --content-encoding br
-
-    - name: Upload Build.wasm.unityweb with metadata
-      run: |
-        aws s3 cp Build/Build.wasm.$VERSION.unityweb \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.wasm.$VERSION.unityweb \
-          --cache-control "public, max-age=86400, must-revalidate" \
-          --content-type "application/wasm" \
-          --content-encoding br
-
-    - name: Upload updated index.html
-      run: |
-        aws s3 cp index.html \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/index.html \
-          --cache-control "no-cache" \
-          --content-type "text/html"
-
-    - name: CloudFront Invalidation
-      run: |
-        aws cloudfront create-invalidation \
-          --distribution-id ${{ inputs.cloudfront_distribution_id }} \
-          --paths ${{ inputs.invalidate_paths }}
+      - name: CloudFront Invalidation
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ inputs.cloudfront_distribution_id }} \
+            --paths ${{ inputs.invalidate_paths }}     
