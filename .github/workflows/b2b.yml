@@ -1,0 +1,97 @@
+name: Upload Build to S3
+
+on:
+  workflow_call:
+    inputs:
+      s3_bucket:
+         required: true
+         type: string
+      s3_folder:
+        required: true
+        type: string
+      cloudfront_distribution_id:
+        required: true
+        type: string
+      invalidate_paths:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Upload Build.loader.js with metadata
+        run: |
+          aws s3 cp Build/Build.loader.js \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.loader.js \
+            --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+            --content-type "application/javascript"
+
+      - name: Upload Build.framework.js.unityweb with metadata
+        run: |
+          aws s3 cp Build/Build.framework.js.unityweb \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb \
+            --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+            --content-type "application/javascript" \
+            --content-encoding br
+
+      - name: Upload Build.data.unityweb with metadata
+        run: |
+          aws s3 cp Build/Build.data.unityweb \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.data.unityweb \
+            --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+            --content-type "application/octet-stream" \
+            --content-encoding br
+
+      - name: Upload Build.wasm.unityweb with metadata
+        run: |
+          aws s3 cp Build/Build.wasm.unityweb \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb \
+            --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+            --content-type "application/wasm" \
+            --content-encoding br
+
+      - name: Upload index.html
+        run: |
+          aws s3 cp index.html \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/index.html \
+            --cache-control "no-cache" \
+            --content-type "text/html"
+      
+      - name: Upload autoSizeText.min.js
+        run: |
+          aws s3 cp autoSizeText.min.js \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/autoSizeText.min.js \
+            --cache-control "no-cache" \
+            --content-type "application/javascript"
+
+      - name: Upload awt.js
+        run: |
+          aws s3 cp awt.js \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/awt.js \
+            --cache-control "no-cache" \
+            --content-type "application/javascript" 
+
+      - name: Upload awtConfigurations.js
+        run: |
+          aws s3 cp awtConfigurations.js \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/awtConfigurations.js \
+            --cache-control "no-cache" \
+            --content-type "application/javascript"
+
+      - name: Upload style1.css
+        run: |
+          aws s3 cp style1.css \
+            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/style1.css \
+            --cache-control "no-cache" \
+            --content-type "text/css"
+
+      - name: CloudFront Invalidation
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ inputs.cloudfront_distribution_id }} \
+            --paths ${{ inputs.invalidate_paths }}
