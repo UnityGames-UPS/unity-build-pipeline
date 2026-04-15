@@ -130,4 +130,4 @@ jobs:
                 ]
               }]
             }" \
-            "${{ secrets.DISCORD_WEBHOOK }}"
+            "https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
