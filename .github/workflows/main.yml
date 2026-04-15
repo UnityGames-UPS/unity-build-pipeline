@@ -4,8 +4,8 @@ on:
   workflow_call:
     inputs:
       s3_bucket:
-         required: true
-         type: string
+        required: true
+        type: string
       s3_folder:
         required: true
         type: string
@@ -69,42 +69,29 @@ jobs:
             --paths ${{ inputs.invalidate_paths }}
 
       # ---------------------------- #
-      #   DISCORD SUCCESS ALERT      #
+      #   DISCORD NOTIFICATION      #
       # ---------------------------- #
-      - name: Discord Notification on Success
-        if: success()
+      - name: Discord Notification
+        if: always()
         run: |
-          curl -H "Content-Type: application/json" \
-            -X POST \
-            -d "{
-              \"username\": \"Deploy Bot\",
-              \"embeds\": [{
-                \"title\": \"✅ S3 Upload Successful\",
-                \"color\": 3066993,
-                \"fields\": [
-                  { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
-                  { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
-                  { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
-                  { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
-                  { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
-                ]
-              }]
-            }" \
-            "${{ secrets.DISCORD_WEBHOOK }}"
+          WEBHOOK_URL="https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
 
-      # ---------------------------- #
-      #   DISCORD FAILURE ALERT      #
-      # ---------------------------- #
-      - name: Discord Notification on Failure
-        if: failure()
-        run: |
-          curl -H "Content-Type: application/json" \
+          STATUS="${{ job.status }}"
+          COLOR=3066993
+          TITLE="✅ S3 Upload Successful"
+
+          if [ "$STATUS" != "success" ]; then
+            COLOR=15158332
+            TITLE="❌ S3 Upload Failed"
+          fi
+
+          curl --fail -H "Content-Type: application/json" \
             -X POST \
             -d "{
               \"username\": \"Deploy Bot\",
               \"embeds\": [{
-                \"title\": \"❌ S3 Upload Failed\",
-                \"color\": 15158332,
+                \"title\": \"$TITLE\",
+                \"color\": $COLOR,
                 \"fields\": [
                   { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
                   { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
@@ -114,4 +101,4 @@ jobs:
                 ]
               }]
             }" \
-            "https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
+            "$WEBHOOK_URL"
