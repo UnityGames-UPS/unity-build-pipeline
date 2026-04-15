@@ -74,8 +74,6 @@ jobs:
       - name: Discord Notification
         if: always()
         run: |
-          WEBHOOK_URL="https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
-
           STATUS="${{ job.status }}"
           COLOR=3066993
           TITLE="✅ S3 Upload Successful"
@@ -101,4 +99,4 @@ jobs:
                 ]
               }]
             }" \
-            "$WEBHOOK_URL"
+            "https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
