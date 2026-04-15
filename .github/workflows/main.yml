@@ -79,7 +79,8 @@ jobs:
                 { "name": "S3 Bucket", "value": "'"${{ inputs.s3_bucket }}"'" },
                 { "name": "S3 Folder", "value": "'"${{ inputs.s3_folder }}"'" },
                 { "name": "CloudFront ID", "value": "'"${{ inputs.cloudfront_distribution_id }}"'" },
-                { "name": "Triggered By", "value": "'"${{ github.actor }}"'" }
+                { "name": "Triggered By", "value": "'"${{ github.actor }}"'" },
+                { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
               ]
             }]
           }'
