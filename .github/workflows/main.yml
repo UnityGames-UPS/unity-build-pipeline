@@ -57,6 +57,7 @@ jobs:
 
       - name: Discord Notification
         if: always()
+        shell: bash
         run: |
           WEBHOOK_URL="https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
 
@@ -69,22 +70,19 @@ jobs:
             TITLE="S3 Upload Failed"
           fi
 
-          PAYLOAD=$(cat <<EOF
-{
-  "username": "Deploy Bot",
-  "embeds": [{
-    "title": "$TITLE",
-    "color": $COLOR,
-    "fields": [
-      { "name": "S3 Bucket", "value": "${{ inputs.s3_bucket }}" },
-      { "name": "S3 Folder", "value": "${{ inputs.s3_folder }}" },
-      { "name": "CloudFront ID", "value": "${{ inputs.cloudfront_distribution_id }}" },
-      { "name": "Triggered By", "value": "${{ github.actor }}" }
-    ]
-  }]
-}
-EOF
-)
+          PAYLOAD='{
+            "username": "Deploy Bot",
+            "embeds": [{
+              "title": "'"$TITLE"'",
+              "color": '"$COLOR"',
+              "fields": [
+                { "name": "S3 Bucket", "value": "'"${{ inputs.s3_bucket }}"'" },
+                { "name": "S3 Folder", "value": "'"${{ inputs.s3_folder }}"'" },
+                { "name": "CloudFront ID", "value": "'"${{ inputs.cloudfront_distribution_id }}"'" },
+                { "name": "Triggered By", "value": "'"${{ github.actor }}"'" }
+              ]
+            }]
+          }'
 
           curl --fail -H "Content-Type: application/json" \
           -X POST \
