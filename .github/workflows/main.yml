@@ -66,4 +66,52 @@ jobs:
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ inputs.cloudfront_distribution_id }} \
-            --paths ${{ inputs.invalidate_paths }}     
+            --paths ${{ inputs.invalidate_paths }}
+
+      # ---------------------------- #
+      #   DISCORD SUCCESS ALERT      #
+      # ---------------------------- #
+      - name: Discord Notification on Success
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -X POST \
+            -d "{
+              \"username\": \"Deploy Bot\",
+              \"embeds\": [{
+                \"title\": \"✅ S3 Upload Successful\",
+                \"color\": 3066993,
+                \"fields\": [
+                  { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
+                  { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
+                  { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
+                  { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
+                  { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
+                ]
+              }]
+            }" \
+            "${{ secrets.DISCORD_WEBHOOK }}"
+
+      # ---------------------------- #
+      #   DISCORD FAILURE ALERT      #
+      # ---------------------------- #
+      - name: Discord Notification on Failure
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -X POST \
+            -d "{
+              \"username\": \"Deploy Bot\",
+              \"embeds\": [{
+                \"title\": \"❌ S3 Upload Failed\",
+                \"color\": 15158332,
+                \"fields\": [
+                  { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
+                  { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
+                  { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
+                  { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
+                  { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
+                ]
+              }]
+            }" \
+            "${{ secrets.DISCORD_WEBHOOK }}"
