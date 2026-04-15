@@ -15,9 +15,6 @@ on:
       invalidate_paths:
         required: true
         type: string
-    secrets:
-      DISCORD_WEBHOOK:
-        required: true
 
 jobs:
   deploy:
