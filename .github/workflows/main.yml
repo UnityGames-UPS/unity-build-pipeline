@@ -24,79 +24,69 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Upload Build.loader.js with metadata
+      - name: Upload Build.loader.js
         run: |
           aws s3 cp Build/Build.loader.js \
-            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.loader.js \
-            --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
-            --content-type "application/javascript"
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.loader.js
 
-      - name: Upload Build.framework.js.unityweb with metadata
+      - name: Upload Build.framework.js.unityweb
         run: |
           aws s3 cp Build/Build.framework.js.unityweb \
-            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb \
-            --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
-            --content-type "application/javascript" \
-            --content-encoding br
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb
 
-      - name: Upload Build.data.unityweb with metadata
+      - name: Upload Build.data.unityweb
         run: |
           aws s3 cp Build/Build.data.unityweb \
-            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.data.unityweb \
-            --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
-            --content-type "application/octet-stream" \
-            --content-encoding br
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.data.unityweb
 
-      - name: Upload Build.wasm.unityweb with metadata
+      - name: Upload Build.wasm.unityweb
         run: |
           aws s3 cp Build/Build.wasm.unityweb \
-            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb \
-            --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
-            --content-type "application/wasm" \
-            --content-encoding br
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb
 
       - name: Upload index.html
         run: |
           aws s3 cp index.html \
-            s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/index.html \
-            --cache-control "no-cache" \
-            --content-type "text/html"
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/index.html
 
       - name: CloudFront Invalidation
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id ${{ inputs.cloudfront_distribution_id }} \
-            --paths ${{ inputs.invalidate_paths }}
+          --distribution-id ${{ inputs.cloudfront_distribution_id }} \
+          --paths ${{ inputs.invalidate_paths }}
 
-      # ---------------------------- #
-      #   DISCORD NOTIFICATION      #
-      # ---------------------------- #
       - name: Discord Notification
         if: always()
         run: |
+          WEBHOOK_URL="https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
+
           STATUS="${{ job.status }}"
           COLOR=3066993
-          TITLE="✅ S3 Upload Successful"
+          TITLE="S3 Upload Successful"
 
           if [ "$STATUS" != "success" ]; then
             COLOR=15158332
-            TITLE="❌ S3 Upload Failed"
+            TITLE="S3 Upload Failed"
           fi
 
+          PAYLOAD=$(cat <<EOF
+{
+  "username": "Deploy Bot",
+  "embeds": [{
+    "title": "$TITLE",
+    "color": $COLOR,
+    "fields": [
+      { "name": "S3 Bucket", "value": "${{ inputs.s3_bucket }}" },
+      { "name": "S3 Folder", "value": "${{ inputs.s3_folder }}" },
+      { "name": "CloudFront ID", "value": "${{ inputs.cloudfront_distribution_id }}" },
+      { "name": "Triggered By", "value": "${{ github.actor }}" }
+    ]
+  }]
+}
+EOF
+)
+
           curl --fail -H "Content-Type: application/json" \
-            -X POST \
-            -d "{
-              \"username\": \"Deploy Bot\",
-              \"embeds\": [{
-                \"title\": \"$TITLE\",
-                \"color\": $COLOR,
-                \"fields\": [
-                  { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
-                  { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
-                  { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
-                  { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
-                  { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
-                ]
-              }]
-            }" \
-            "https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
+          -X POST \
+          -d "$PAYLOAD" \
+          "$WEBHOOK_URL"
