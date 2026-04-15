@@ -27,27 +27,40 @@ jobs:
       - name: Upload Build.loader.js
         run: |
           aws s3 cp Build/Build.loader.js \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.loader.js
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.loader.js \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+          --content-type "application/javascript"
 
       - name: Upload Build.framework.js.unityweb
         run: |
           aws s3 cp Build/Build.framework.js.unityweb \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+          --content-type "application/javascript" \
+          --content-encoding br
 
       - name: Upload Build.data.unityweb
         run: |
           aws s3 cp Build/Build.data.unityweb \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.data.unityweb
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.data.unityweb \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+          --content-type "application/octet-stream" \
+          --content-encoding br
 
       - name: Upload Build.wasm.unityweb
         run: |
           aws s3 cp Build/Build.wasm.unityweb \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+          --content-type "application/wasm" \
+          --content-encoding br
 
       - name: Upload index.html
         run: |
           aws s3 cp index.html \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/index.html
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/index.html \
+          --cache-control "no-cache" \
+          --content-type "text/html"
 
       - name: CloudFront Invalidation
         run: |
