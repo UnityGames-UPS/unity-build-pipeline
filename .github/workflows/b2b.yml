@@ -4,8 +4,8 @@ on:
   workflow_call:
     inputs:
       s3_bucket:
-         required: true
-         type: string
+        required: true
+        type: string
       s3_folder:
         required: true
         type: string
@@ -15,6 +15,9 @@ on:
       invalidate_paths:
         required: true
         type: string
+    secrets:
+      DISCORD_WEBHOOK:
+        required: true
 
 jobs:
   deploy:
@@ -95,3 +98,36 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id ${{ inputs.cloudfront_distribution_id }} \
             --paths ${{ inputs.invalidate_paths }}
+
+      # ---------------------------- #
+      #   DISCORD NOTIFICATION      #
+      # ---------------------------- #
+      - name: Discord Notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          COLOR=3066993
+          TITLE="✅ S3 Upload Successful"
+
+          if [ "$STATUS" != "success" ]; then
+            COLOR=15158332
+            TITLE="❌ S3 Upload Failed"
+          fi
+
+          curl --fail -H "Content-Type: application/json" \
+            -X POST \
+            -d "{
+              \"username\": \"Deploy Bot\",
+              \"embeds\": [{
+                \"title\": \"$TITLE\",
+                \"color\": $COLOR,
+                \"fields\": [
+                  { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
+                  { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
+                  { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
+                  { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
+                  { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
+                ]
+              }]
+            }" \
+            "${{ secrets.DISCORD_WEBHOOK }}"
