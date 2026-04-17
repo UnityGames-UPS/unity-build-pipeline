@@ -105,26 +105,33 @@ jobs:
           STATUS="${{ job.status }}"
           COLOR=3066993
           TITLE="✅ S3 Upload Successful"
-
+      
           if [ "$STATUS" != "success" ]; then
             COLOR=15158332
             TITLE="❌ S3 Upload Failed"
           fi
-
-          curl --fail -H "Content-Type: application/json" \
-            -X POST \
-            -d "{
-              \"username\": \"Deploy Bot\",
-              \"embeds\": [{
-                \"title\": \"$TITLE\",
-                \"color\": $COLOR,
-                \"fields\": [
-                  { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
-                  { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
-                  { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
-                  { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
-                  { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
-                ]
-              }]
-            }" \
-            "https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
+      
+          PAYLOAD="{
+            \"username\": \"Deploy Bot\",
+            \"embeds\": [{
+              \"title\": \"$TITLE\",
+              \"color\": $COLOR,
+              \"fields\": [
+                { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
+                { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
+                { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
+                { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
+                { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
+              ]
+            }]
+          }"
+      
+          for WEBHOOK in \
+            "https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_" \
+            "https://discord.com/api/webhooks/1494584505900601490/CE4PgrqU2tmG8VCPE6y3Zs-9AdZGaiLZKFOPxnB5DFztSIAzUA2d2kuwvcbWc_qMFg97"
+          do
+            curl --fail -H "Content-Type: application/json" \
+              -X POST \
+              -d "$PAYLOAD" \
+              "$WEBHOOK"
+          done
