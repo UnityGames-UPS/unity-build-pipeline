@@ -68,36 +68,35 @@ jobs:
           --distribution-id ${{ inputs.cloudfront_distribution_id }} \
           --paths ${{ inputs.invalidate_paths }}
 
+      # ---------------------------- #
+      #   DISCORD NOTIFICATION      #
+      # ---------------------------- #
       - name: Discord Notification
         if: always()
-        shell: bash
         run: |
-          WEBHOOK_URL="https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
-
           STATUS="${{ job.status }}"
           COLOR=3066993
-          TITLE="S3 Upload Successful"
+          TITLE="✅ S3 Upload Successful"
 
           if [ "$STATUS" != "success" ]; then
             COLOR=15158332
-            TITLE="S3 Upload Failed"
+            TITLE="❌ S3 Upload Failed"
           fi
 
-          PAYLOAD='{
-            "username": "Deploy Bot",
-            "embeds": [{
-              "title": "'"$TITLE"'",
-              "color": '"$COLOR"',
-              "fields": [
-                { "name": "S3 Bucket", "value": "'"${{ inputs.s3_bucket }}"'" },
-                { "name": "S3 Folder", "value": "'"${{ inputs.s3_folder }}"'" },
-                { "name": "CloudFront ID", "value": "'"${{ inputs.cloudfront_distribution_id }}"'" },
-                { "name": "Triggered By", "value": "'"${{ github.actor }}"'" }
-              ]
-            }]
-          }'
-
           curl --fail -H "Content-Type: application/json" \
-          -X POST \
-          -d "$PAYLOAD" \
-          "$WEBHOOK_URL"
+            -X POST \
+            -d "{
+              \"username\": \"Deploy Bot\",
+              \"embeds\": [{
+                \"title\": \"$TITLE\",
+                \"color\": $COLOR,
+                \"fields\": [
+                  { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
+                  { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
+                  { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
+                  { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
+                  { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
+                ]
+              }]
+            }" \
+            "https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
