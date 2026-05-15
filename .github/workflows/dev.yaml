@@ -24,40 +24,45 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate Dynamic Build Names
+      - name: Detect Unity Build Filenames
         run: |
-          HASH=$(date +%s)
-
-          LOADER="Build.loader.${HASH}.js"
-          FRAMEWORK="Build.framework.${HASH}.js.unityweb"
-          DATA="Build.data.${HASH}.unityweb"
-          WASM="Build.wasm.${HASH}.unityweb"
-
-          cp Build/Build.loader.js Build/$LOADER
-          cp Build/Build.framework.js.unityweb Build/$FRAMEWORK
-          cp Build/Build.data.unityweb Build/$DATA
-          cp Build/Build.wasm.unityweb Build/$WASM
+          LOADER=$(ls Build/*.loader.js | head -1 | xargs basename)
+          FRAMEWORK=$(ls Build/*.framework.js.unityweb | head -1 | xargs basename)
+          DATA=$(ls Build/*.data.unityweb | head -1 | xargs basename)
+          WASM=$(ls Build/*.wasm.unityweb | head -1 | xargs basename)
 
           echo "LOADER=$LOADER" >> $GITHUB_ENV
           echo "FRAMEWORK=$FRAMEWORK" >> $GITHUB_ENV
           echo "DATA=$DATA" >> $GITHUB_ENV
           echo "WASM=$WASM" >> $GITHUB_ENV
 
-      - name: Update index.html with Dynamic Names
-        run: |
-          sed -i "s|Build.loader.js|${LOADER}|g" index.html
-          sed -i "s|Build.framework.js.unityweb|${FRAMEWORK}|g" index.html
-          sed -i "s|Build.data.unityweb|${DATA}|g" index.html
-          sed -i "s|Build.wasm.unityweb|${WASM}|g" index.html
+          echo "Detected files:"
+          echo "  LOADER:    $LOADER"
+          echo "  FRAMEWORK: $FRAMEWORK"
+          echo "  DATA:      $DATA"
+          echo "  WASM:      $WASM"
 
-      - name: Upload Build.loader.js
+      - name: Generate Build Manifest
+        run: |
+          cat > build-manifest.json << EOF
+          {
+            "loader": "${{ env.LOADER }}",
+            "framework": "${{ env.FRAMEWORK }}",
+            "data": "${{ env.DATA }}",
+            "wasm": "${{ env.WASM }}"
+          }
+          EOF
+          echo "Manifest generated:"
+          cat build-manifest.json
+
+      - name: Upload loader
         run: |
           aws s3 cp Build/${{ env.LOADER }} \
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/${{ env.LOADER }} \
           --cache-control "public, max-age=172800, s-maxage=172800" \
           --content-type "application/javascript"
 
-      - name: Upload Build.framework.js.unityweb
+      - name: Upload framework
         run: |
           aws s3 cp Build/${{ env.FRAMEWORK }} \
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/${{ env.FRAMEWORK }} \
@@ -65,7 +70,7 @@ jobs:
           --content-type "application/javascript" \
           --content-encoding br
 
-      - name: Upload Build.data.unityweb
+      - name: Upload data
         run: |
           aws s3 cp Build/${{ env.DATA }} \
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/${{ env.DATA }} \
@@ -73,13 +78,20 @@ jobs:
           --content-type "application/octet-stream" \
           --content-encoding br
 
-      - name: Upload Build.wasm.unityweb
+      - name: Upload wasm
         run: |
           aws s3 cp Build/${{ env.WASM }} \
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/${{ env.WASM }} \
           --cache-control "public, max-age=172800, s-maxage=172800" \
           --content-type "application/wasm" \
           --content-encoding br
+
+      - name: Upload Build Manifest
+        run: |
+          aws s3 cp build-manifest.json \
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/build-manifest.json \
+          --cache-control "no-cache" \
+          --content-type "application/json"
 
       - name: Upload index.html
         run: |
@@ -92,7 +104,7 @@ jobs:
         run: |
           aws cloudfront create-invalidation \
           --distribution-id ${{ inputs.cloudfront_distribution_id }} \
-          --paths ${{ inputs.invalidate_paths }}
+          --paths "/${{ inputs.s3_folder }}/index.html" "/${{ inputs.s3_folder }}/build-manifest.json"
 
       # ---------------------------- #
       #   DISCORD NOTIFICATION      #
@@ -126,6 +138,8 @@ jobs:
                     { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
                     { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
                     { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
+                    { \"name\": \"Loader\", \"value\": \"${{ env.LOADER }}\" },
+                    { \"name\": \"Wasm\", \"value\": \"${{ env.WASM }}\" },
                     { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
                     { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
                   ]
