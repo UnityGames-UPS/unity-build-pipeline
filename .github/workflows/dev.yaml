@@ -100,11 +100,11 @@ jobs:
           --cache-control "no-cache" \
           --content-type "text/html"
 
-      - name: CloudFront Invalidation
-        run: |
-          aws cloudfront create-invalidation \
-          --distribution-id ${{ inputs.cloudfront_distribution_id }} \
-          --paths "/${{ inputs.s3_folder }}/index.html" "/${{ inputs.s3_folder }}/build-manifest.json"
+      # - name: CloudFront Invalidation
+      #   run: |
+      #     aws cloudfront create-invalidation \
+      #     --distribution-id ${{ inputs.cloudfront_distribution_id }} \
+      #     --paths "/${{ inputs.s3_folder }}/index.html" "/${{ inputs.s3_folder }}/build-manifest.json"
 
       # ---------------------------- #
       #   DISCORD NOTIFICATION      #
