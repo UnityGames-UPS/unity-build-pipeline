@@ -59,14 +59,14 @@ jobs:
         run: |
           aws s3 cp Build/${{ env.LOADER }} \
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/${{ env.LOADER }} \
-          --cache-control "public, max-age=172800, s-maxage=172800" \
+          --cache-control "public, max-age=0, s-maxage=300" \
           --content-type "application/javascript"
 
       - name: Upload framework
         run: |
           aws s3 cp Build/${{ env.FRAMEWORK }} \
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/${{ env.FRAMEWORK }} \
-          --cache-control "public, max-age=172800, s-maxage=172800" \
+          --cache-control "public, max-age=0, s-maxage=300" \
           --content-type "application/javascript" \
           --content-encoding br
 
@@ -74,7 +74,7 @@ jobs:
         run: |
           aws s3 cp Build/${{ env.DATA }} \
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/${{ env.DATA }} \
-          --cache-control "public, max-age=172800, s-maxage=172800" \
+          --cache-control "public, max-age=0, s-maxage=300" \
           --content-type "application/octet-stream" \
           --content-encoding br
 
@@ -82,7 +82,7 @@ jobs:
         run: |
           aws s3 cp Build/${{ env.WASM }} \
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/${{ env.WASM }} \
-          --cache-control "public, max-age=172800, s-maxage=172800" \
+          --cache-control "public, max-age=0, s-maxage=300" \
           --content-type "application/wasm" \
           --content-encoding br
 
