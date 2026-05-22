@@ -75,7 +75,7 @@ jobs:
         if: always()
         run: |
           STATUS="${{ job.status }}"
-          COLOR=8640066993
+          COLOR=3066993
           TITLE="✅ S3 Upload Successful"
 
           if [ "$STATUS" != "success" ]; then
