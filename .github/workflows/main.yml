@@ -62,6 +62,22 @@ jobs:
           --cache-control "no-cache" \
           --content-type "text/html"
 
+      - name: Check if StreamingAssets exists
+        id: check_streaming_assets
+        run: |
+          if [ -d "StreamingAssets" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload StreamingAssets folder
+        if: steps.check_streaming_assets.outputs.exists == 'true'
+        run: |
+          aws s3 sync StreamingAssets/ \
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/StreamingAssets/ \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400"
+
       - name: CloudFront Invalidation
         run: |
           aws cloudfront create-invalidation \
