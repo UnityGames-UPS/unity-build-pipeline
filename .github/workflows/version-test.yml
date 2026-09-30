@@ -1,0 +1,158 @@
+name: Upload Build to S3
+
+on:
+  workflow_call:
+    inputs:
+      s3_bucket:
+        required: true
+        type: string
+      s3_folder:
+        required: true
+        type: string
+      cloudfront_distribution_id:
+        required: true
+        type: string
+      invalidate_paths:
+        required: true
+        type: string
+      version:
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Upload Build.loader.js
+        run: |
+          aws s3 cp Build/Build.loader.js \
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.loader.js \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+          --content-type "application/javascript"
+
+      - name: Upload Build.framework.js.unityweb
+        run: |
+          aws s3 cp Build/Build.framework.js.unityweb \
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+          --content-type "application/javascript" \
+          --content-encoding gzip
+
+      - name: Upload Build.data.unityweb
+        run: |
+          aws s3 cp Build/Build.data.unityweb \
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.data.unityweb \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+          --content-type "application/octet-stream" \
+          --content-encoding gzip
+
+      - name: Upload Build.wasm.unityweb
+        run: |
+          aws s3 cp Build/Build.wasm.unityweb \
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
+          --content-type "application/wasm" \
+          --content-encoding gzip
+
+      # ---------------------------- #
+      #   VERSION CACHE-BUSTING      #
+      # ---------------------------- #
+      - name: Add version to build URLs
+        if: inputs.version != ''
+        run: |
+          sed -i -E 's#(Build\.(loader\.js|framework\.js\.unityweb|data\.unityweb|wasm\.unityweb))"#\1?v=${{ inputs.version }}"#g' index.html
+          grep -q "?v=${{ inputs.version }}" index.html || { echo "Version was not added to index.html"; exit 1; }
+
+      - name: Upload index.html
+        run: |
+          aws s3 cp index.html \
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/index.html \
+          --cache-control "no-cache" \
+          --content-type "text/html"
+
+      - name: Check if StreamingAssets exists
+        id: check_streaming_assets
+        run: |
+          if [ -d "StreamingAssets" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload StreamingAssets folder
+        if: steps.check_streaming_assets.outputs.exists == 'true'
+        run: |
+          aws s3 sync StreamingAssets/ \
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/StreamingAssets/ \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400"
+
+      - name: Check if TemplateData exists
+        id: check_template_data
+        run: |
+          if [ -d "TemplateData" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload TemplateData folder
+        if: steps.check_template_data.outputs.exists == 'true'
+        run: |
+          aws s3 sync TemplateData/ \
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/TemplateData/ \
+          --cache-control "public, max-age=0, must-revalidate, s-maxage=86400"
+
+      - name: CloudFront Invalidation
+        run: |
+          aws cloudfront create-invalidation \
+          --distribution-id ${{ inputs.cloudfront_distribution_id }} \
+          --paths "${{ inputs.invalidate_paths }}"
+
+      # ---------------------------- #
+      #   DISCORD NOTIFICATION       #
+      # ---------------------------- #
+      - name: Discord Notification
+        if: always()
+        env:
+          WEBHOOKS_RAW: ${{ secrets.DISCORD_WEBHOOKS }}
+        run: |
+          STATUS="${{ job.status }}"
+          COLOR=3066993
+          TITLE="✅ S3 Upload Successful"
+
+          if [ "$STATUS" != "success" ]; then
+            COLOR=15158332
+            TITLE="❌ S3 Upload Failed"
+          fi
+
+          if [ -z "$WEBHOOKS_RAW" ]; then
+            echo "DISCORD_WEBHOOKS secret not set, skipping notification"
+            exit 0
+          fi
+
+          while IFS= read -r WEBHOOK; do
+            [ -z "$WEBHOOK" ] && continue
+            curl --fail -H "Content-Type: application/json" \
+              -X POST \
+              -d "{
+                \"username\": \"Deploy Bot\",
+                \"embeds\": [{
+                  \"title\": \"$TITLE\",
+                  \"color\": $COLOR,
+                  \"fields\": [
+                    { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
+                    { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
+                    { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
+                    { \"name\": \"Version\", \"value\": \"${{ inputs.version || 'n/a' }}\" },
+                    { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
+                    { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
+                  ]
+                }]
+              }" \
+              "$WEBHOOK"
+          done <<< "$WEBHOOKS_RAW"
