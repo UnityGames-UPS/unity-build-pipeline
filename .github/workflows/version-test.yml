@@ -107,6 +107,25 @@ jobs:
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/TemplateData/ \
           --cache-control "public, max-age=0, must-revalidate, s-maxage=86400"
 
+      # ---------------------------- #
+      #   VERSION.JSON               #
+      # ---------------------------- #
+      - name: Generate and upload version.json
+        if: inputs.version != ''
+        run: |
+          cat > version.json <<EOF
+          {
+            "latestVersion": "${{ inputs.version }}",
+            "commit": "${{ github.sha }}",
+            "deployedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          aws s3 cp version.json \
+          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/version.json \
+          --cache-control "no-cache" \
+          --content-type "application/json"
+
       - name: CloudFront Invalidation
         run: |
           aws cloudfront create-invalidation \
