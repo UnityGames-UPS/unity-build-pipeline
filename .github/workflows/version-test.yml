@@ -15,16 +15,13 @@ on:
       invalidate_paths:
         required: true
         type: string
-      version:
-        required: false
-        type: string
-        default: ""
 
 jobs:
   deploy:
     runs-on: self-hosted
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -59,15 +56,6 @@ jobs:
           --content-type "application/wasm" \
           --content-encoding gzip
 
-      # ---------------------------- #
-      #   VERSION CACHE-BUSTING      #
-      # ---------------------------- #
-      - name: Add version to build URLs
-        if: inputs.version != ''
-        run: |
-          sed -i -E 's#(Build\.(loader\.js|framework\.js\.unityweb|data\.unityweb|wasm\.unityweb))"#\1?v=${{ inputs.version }}"#g' index.html
-          grep -q "?v=${{ inputs.version }}" index.html || { echo "Version was not added to index.html"; exit 1; }
-
       - name: Upload index.html
         run: |
           aws s3 cp index.html \
@@ -79,9 +67,9 @@ jobs:
         id: check_streaming_assets
         run: |
           if [ -d "StreamingAssets" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload StreamingAssets folder
@@ -95,9 +83,9 @@ jobs:
         id: check_template_data
         run: |
           if [ -d "TemplateData" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload TemplateData folder
@@ -107,40 +95,59 @@ jobs:
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/TemplateData/ \
           --cache-control "public, max-age=0, must-revalidate, s-maxage=86400"
 
-      # ---------------------------- #
-      #   VERSION.JSON               #
-      # ---------------------------- #
-      - name: Generate and upload version.json
-        if: inputs.version != ''
+      - name: Update version.json
         run: |
-          cat > version.json <<EOF
+          VERSION_FILE="version.json"
+          S3_VERSION_PATH="s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/version.json"
+
+          if aws s3 cp "$S3_VERSION_PATH" "$VERSION_FILE" 2>/dev/null; then
+            CURRENT_VERSION=$(jq -r '.version' "$VERSION_FILE")
+
+            echo "Current version: $CURRENT_VERSION"
+
+            MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
+            MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
+            PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
+
+            PATCH=$((PATCH + 1))
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+
+          else
+            NEW_VERSION="0.0.1"
+
+            echo "No version.json found."
+            echo "Starting version: $NEW_VERSION"
+          fi
+
+          echo "New version: $NEW_VERSION"
+
+          cat > "$VERSION_FILE" <<EOF
           {
-            "latestVersion": "${{ inputs.version }}",
-            "commit": "${{ github.sha }}",
-            "deployedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              "version": "$NEW_VERSION"
           }
           EOF
 
-          aws s3 cp version.json \
-          s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/version.json \
-          --cache-control "no-cache" \
-          --content-type "application/json"
+          aws s3 cp \
+            "$VERSION_FILE" \
+            "$S3_VERSION_PATH" \
+            --cache-control "no-cache" \
+            --content-type "application/json"
+
+          rm -f "$VERSION_FILE"
+
+          echo "✓ version.json updated to $NEW_VERSION"
 
       - name: CloudFront Invalidation
         run: |
           aws cloudfront create-invalidation \
           --distribution-id ${{ inputs.cloudfront_distribution_id }} \
-          --paths "${{ inputs.invalidate_paths }}"
+          --paths ${{ inputs.invalidate_paths }}
 
-      # ---------------------------- #
-      #   DISCORD NOTIFICATION       #
-      # ---------------------------- #
       - name: Discord Notification
         if: always()
-        env:
-          WEBHOOKS_RAW: ${{ secrets.DISCORD_WEBHOOKS }}
         run: |
           STATUS="${{ job.status }}"
+
           COLOR=3066993
           TITLE="✅ S3 Upload Successful"
 
@@ -149,14 +156,16 @@ jobs:
             TITLE="❌ S3 Upload Failed"
           fi
 
-          if [ -z "$WEBHOOKS_RAW" ]; then
-            echo "DISCORD_WEBHOOKS secret not set, skipping notification"
-            exit 0
-          fi
+          WEBHOOKS=(
+            "${{ secrets.DISCORD_WEBHOOK_1 }}"
+            "${{ secrets.DISCORD_WEBHOOK_2 }}"
+          )
 
-          while IFS= read -r WEBHOOK; do
+          for WEBHOOK in "${WEBHOOKS[@]}"; do
             [ -z "$WEBHOOK" ] && continue
-            curl --fail -H "Content-Type: application/json" \
+
+            curl --fail \
+              -H "Content-Type: application/json" \
               -X POST \
               -d "{
                 \"username\": \"Deploy Bot\",
@@ -164,14 +173,28 @@ jobs:
                   \"title\": \"$TITLE\",
                   \"color\": $COLOR,
                   \"fields\": [
-                    { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
-                    { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
-                    { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
-                    { \"name\": \"Version\", \"value\": \"${{ inputs.version || 'n/a' }}\" },
-                    { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
-                    { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
+                    {
+                      \"name\": \"S3 Bucket\",
+                      \"value\": \"${{ inputs.s3_bucket }}\"
+                    },
+                    {
+                      \"name\": \"S3 Folder\",
+                      \"value\": \"${{ inputs.s3_folder }}\"
+                    },
+                    {
+                      \"name\": \"CloudFront ID\",
+                      \"value\": \"${{ inputs.cloudfront_distribution_id }}\"
+                    },
+                    {
+                      \"name\": \"Triggered By\",
+                      \"value\": \"${{ github.actor }}\"
+                    },
+                    {
+                      \"name\": \"Workflow\",
+                      \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+                    }
                   ]
                 }]
               }" \
               "$WEBHOOK"
-          done <<< "$WEBHOOKS_RAW"
+          done
