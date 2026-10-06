@@ -31,7 +31,6 @@ jobs:
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.loader.js \
           --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
           --content-type "application/javascript" \
-          --content-encoding br
 
       - name: Upload Build.framework.js.unityweb
         run: |
