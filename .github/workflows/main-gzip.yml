@@ -21,6 +21,7 @@ jobs:
     runs-on: self-hosted
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -66,9 +67,9 @@ jobs:
         id: check_streaming_assets
         run: |
           if [ -d "StreamingAssets" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload StreamingAssets folder
@@ -82,9 +83,9 @@ jobs:
         id: check_template_data
         run: |
           if [ -d "TemplateData" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload TemplateData folder
@@ -94,19 +95,59 @@ jobs:
           s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/TemplateData/ \
           --cache-control "public, max-age=0, must-revalidate, s-maxage=86400"
 
+      - name: Update version.json
+        run: |
+          VERSION_FILE="version.json"
+          S3_VERSION_PATH="s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/version.json"
+
+          if aws s3 cp "$S3_VERSION_PATH" "$VERSION_FILE" 2>/dev/null; then
+            CURRENT_VERSION=$(jq -r '.version' "$VERSION_FILE")
+
+            echo "Current version: $CURRENT_VERSION"
+
+            MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
+            MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
+            PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
+
+            PATCH=$((PATCH + 1))
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+
+          else
+            NEW_VERSION="0.0.1"
+
+            echo "No version.json found."
+            echo "Starting version: $NEW_VERSION"
+          fi
+
+          echo "New version: $NEW_VERSION"
+
+          cat > "$VERSION_FILE" <<EOF
+          {
+              "version": "$NEW_VERSION"
+          }
+          EOF
+
+          aws s3 cp \
+            "$VERSION_FILE" \
+            "$S3_VERSION_PATH" \
+            --cache-control "no-cache" \
+            --content-type "application/json"
+
+          rm -f "$VERSION_FILE"
+
+          echo "✓ version.json updated to $NEW_VERSION"
+
       - name: CloudFront Invalidation
         run: |
           aws cloudfront create-invalidation \
           --distribution-id ${{ inputs.cloudfront_distribution_id }} \
           --paths ${{ inputs.invalidate_paths }}
 
-      # ---------------------------- #
-      #   DISCORD NOTIFICATION      #
-      # ---------------------------- #
       - name: Discord Notification
         if: always()
         run: |
           STATUS="${{ job.status }}"
+
           COLOR=3066993
           TITLE="✅ S3 Upload Successful"
 
@@ -116,12 +157,15 @@ jobs:
           fi
 
           WEBHOOKS=(
-            "https://discord.com/api/webhooks/1433719872063275108/ycFXIhb82-rI3pOMAJFMRgpMD72xadJJzW-t_3UohOZ_6bDIdLsIUOdX5_hxGA0oKvE_"
-            "https://discord.com/api/webhooks/1494584505900601490/CE4PgrqU2tmG8VCPE6y3Zs-9AdZGaiLZKFOPxnB5DFztSIAzUA2d2kuwvcbWc_qMFg97"
+            "${{ secrets.DISCORD_WEBHOOK_1 }}"
+            "${{ secrets.DISCORD_WEBHOOK_2 }}"
           )
 
           for WEBHOOK in "${WEBHOOKS[@]}"; do
-            curl --fail -H "Content-Type: application/json" \
+            [ -z "$WEBHOOK" ] && continue
+
+            curl --fail \
+              -H "Content-Type: application/json" \
               -X POST \
               -d "{
                 \"username\": \"Deploy Bot\",
@@ -129,11 +173,26 @@ jobs:
                   \"title\": \"$TITLE\",
                   \"color\": $COLOR,
                   \"fields\": [
-                    { \"name\": \"S3 Bucket\", \"value\": \"${{ inputs.s3_bucket }}\" },
-                    { \"name\": \"S3 Folder\", \"value\": \"${{ inputs.s3_folder }}\" },
-                    { \"name\": \"CloudFront ID\", \"value\": \"${{ inputs.cloudfront_distribution_id }}\" },
-                    { \"name\": \"Triggered By\", \"value\": \"${{ github.actor }}\" },
-                    { \"name\": \"Workflow\", \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\" }
+                    {
+                      \"name\": \"S3 Bucket\",
+                      \"value\": \"${{ inputs.s3_bucket }}\"
+                    },
+                    {
+                      \"name\": \"S3 Folder\",
+                      \"value\": \"${{ inputs.s3_folder }}\"
+                    },
+                    {
+                      \"name\": \"CloudFront ID\",
+                      \"value\": \"${{ inputs.cloudfront_distribution_id }}\"
+                    },
+                    {
+                      \"name\": \"Triggered By\",
+                      \"value\": \"${{ github.actor }}\"
+                    },
+                    {
+                      \"name\": \"Workflow\",
+                      \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+                    }
                   ]
                 }]
               }" \
