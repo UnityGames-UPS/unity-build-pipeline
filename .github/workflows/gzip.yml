@@ -1,8 +1,12 @@
+
 name: Upload Build to S3
 
 on:
   workflow_call:
     inputs:
+      deploy_env:
+        required: true
+        type: string
       s3_bucket:
         required: true
         type: string
@@ -15,6 +19,12 @@ on:
       invalidate_paths:
         required: true
         type: string
+
+    secrets:
+      DISCORD_WEBHOOK_DEV:
+        required: false
+      DISCORD_WEBHOOK_PROD:
+        required: false
 
 jobs:
   deploy:
@@ -65,6 +75,7 @@ jobs:
 
       - name: Check if StreamingAssets exists
         id: check_streaming_assets
+        shell: bash
         run: |
           if [ -d "StreamingAssets" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -81,6 +92,7 @@ jobs:
 
       - name: Check if TemplateData exists
         id: check_template_data
+        shell: bash
         run: |
           if [ -d "TemplateData" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -111,7 +123,6 @@ jobs:
 
             PATCH=$((PATCH + 1))
             NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-
           else
             NEW_VERSION="0.0.1"
 
@@ -135,66 +146,86 @@ jobs:
 
           rm -f "$VERSION_FILE"
 
-          echo "✓ version.json updated to $NEW_VERSION"
+          echo "version.json updated to $NEW_VERSION"
 
       - name: CloudFront Invalidation
         run: |
           aws cloudfront create-invalidation \
-          --distribution-id ${{ inputs.cloudfront_distribution_id }} \
+          --distribution-id "${{ inputs.cloudfront_distribution_id }}" \
           --paths ${{ inputs.invalidate_paths }}
 
       - name: Discord Notification
         if: always()
+        env:
+          DEPLOY_ENV: ${{ inputs.deploy_env }}
+          DISCORD_WEBHOOK_DEV: ${{ secrets.DISCORD_WEBHOOK_DEV }}
+          DISCORD_WEBHOOK_PROD: ${{ secrets.DISCORD_WEBHOOK_PROD }}
+          S3_BUCKET: ${{ inputs.s3_bucket }}
+          S3_FOLDER: ${{ inputs.s3_folder }}
+          CLOUDFRONT_ID: ${{ inputs.cloudfront_distribution_id }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          STATUS: ${{ job.status }}
+        shell: bash
         run: |
-          STATUS="${{ job.status }}"
+          set -euo pipefail
+
+          case "$DEPLOY_ENV" in
+            dev)
+              WEBHOOK="$DISCORD_WEBHOOK_DEV"
+              ENVIRONMENT="Development"
+              ;;
+            prod)
+              WEBHOOK="$DISCORD_WEBHOOK_PROD"
+              ENVIRONMENT="Production"
+              ;;
+            *)
+              echo "Invalid deployment environment: $DEPLOY_ENV"
+              exit 1
+              ;;
+          esac
+
+          if [ -z "$WEBHOOK" ]; then
+            echo "Discord webhook is missing for $ENVIRONMENT."
+            exit 1
+          fi
 
           COLOR=3066993
-          TITLE="✅ S3 Upload Successful"
+          TITLE="S3 Upload Successful - $ENVIRONMENT"
 
           if [ "$STATUS" != "success" ]; then
             COLOR=15158332
-            TITLE="❌ S3 Upload Failed"
+            TITLE="S3 Upload Failed - $ENVIRONMENT"
           fi
 
-          WEBHOOKS=(
-            "${{ secrets.DISCORD_WEBHOOK_1 }}"
-            "${{ secrets.DISCORD_WEBHOOK_2 }}"
-          )
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg bucket "$S3_BUCKET" \
+            --arg folder "$S3_FOLDER" \
+            --arg distribution "$CLOUDFRONT_ID" \
+            --arg actor "$ACTOR" \
+            --arg workflow "https://github.com/$REPOSITORY/actions/runs/$RUN_ID" \
+            --arg environment "$ENVIRONMENT" \
+            --argjson color "$COLOR" \
+            '{
+              username: "Deploy Bot",
+              embeds: [{
+                title: $title,
+                color: $color,
+                fields: [
+                  {name: "Environment", value: $environment},
+                  {name: "S3 Bucket", value: $bucket},
+                  {name: "S3 Folder", value: $folder},
+                  {name: "CloudFront ID", value: $distribution},
+                  {name: "Triggered By", value: $actor},
+                  {name: "Workflow", value: $workflow}
+                ]
+              }]
+            }')
 
-          for WEBHOOK in "${WEBHOOKS[@]}"; do
-            [ -z "$WEBHOOK" ] && continue
-
-            curl --fail \
-              -H "Content-Type: application/json" \
-              -X POST \
-              -d "{
-                \"username\": \"Deploy Bot\",
-                \"embeds\": [{
-                  \"title\": \"$TITLE\",
-                  \"color\": $COLOR,
-                  \"fields\": [
-                    {
-                      \"name\": \"S3 Bucket\",
-                      \"value\": \"${{ inputs.s3_bucket }}\"
-                    },
-                    {
-                      \"name\": \"S3 Folder\",
-                      \"value\": \"${{ inputs.s3_folder }}\"
-                    },
-                    {
-                      \"name\": \"CloudFront ID\",
-                      \"value\": \"${{ inputs.cloudfront_distribution_id }}\"
-                    },
-                    {
-                      \"name\": \"Triggered By\",
-                      \"value\": \"${{ github.actor }}\"
-                    },
-                    {
-                      \"name\": \"Workflow\",
-                      \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
-                    }
-                  ]
-                }]
-              }" \
-              "$WEBHOOK"
-          done
+          curl --fail --silent --show-error \
+            -H "Content-Type: application/json" \
+            -X POST \
+            -d "$PAYLOAD" \
+            "$WEBHOOK"
