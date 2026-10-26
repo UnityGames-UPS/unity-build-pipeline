@@ -109,6 +109,8 @@ jobs:
 
       - name: Update version.json
         run: |
+          set -euo pipefail
+
           VERSION_FILE="version.json"
           S3_VERSION_PATH="s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/version.json"
 
@@ -125,7 +127,6 @@ jobs:
             NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           else
             NEW_VERSION="0.0.1"
-
             echo "No version.json found."
             echo "Starting version: $NEW_VERSION"
           fi
@@ -145,7 +146,6 @@ jobs:
             --content-type "application/json"
 
           rm -f "$VERSION_FILE"
-
           echo "version.json updated to $NEW_VERSION"
 
       - name: CloudFront Invalidation
@@ -166,6 +166,9 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title || '' }}
           STATUS: ${{ job.status }}
         shell: bash
         run: |
@@ -191,6 +194,18 @@ jobs:
             exit 1
           fi
 
+          # Get the commit subject for manual workflow runs if needed.
+          if [ -z "$COMMIT_MESSAGE" ]; then
+            COMMIT_MESSAGE=$(git log -1 --format=%s "$COMMIT_SHA" 2>/dev/null || true)
+          fi
+
+          if [ -z "$COMMIT_MESSAGE" ]; then
+            COMMIT_MESSAGE="Commit message unavailable"
+          fi
+
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
+
           COLOR=3066993
           TITLE="S3 Upload Successful - $ENVIRONMENT"
 
@@ -201,12 +216,15 @@ jobs:
 
           PAYLOAD=$(jq -n \
             --arg title "$TITLE" \
+            --arg environment "$ENVIRONMENT" \
+            --arg branch "$BRANCH" \
+            --arg commit_id "[$SHORT_SHA]($COMMIT_URL)" \
+            --arg commit_message "$COMMIT_MESSAGE" \
             --arg bucket "$S3_BUCKET" \
             --arg folder "$S3_FOLDER" \
             --arg distribution "$CLOUDFRONT_ID" \
             --arg actor "$ACTOR" \
             --arg workflow "https://github.com/$REPOSITORY/actions/runs/$RUN_ID" \
-            --arg environment "$ENVIRONMENT" \
             --argjson color "$COLOR" \
             '{
               username: "Deploy Bot",
@@ -215,6 +233,9 @@ jobs:
                 color: $color,
                 fields: [
                   {name: "Environment", value: $environment},
+                  {name: "Branch", value: $branch},
+                  {name: "Commit ID", value: $commit_id},
+                  {name: "Commit Message", value: ($commit_message | .[0:1000])},
                   {name: "S3 Bucket", value: $bucket},
                   {name: "S3 Folder", value: $folder},
                   {name: "CloudFront ID", value: $distribution},
