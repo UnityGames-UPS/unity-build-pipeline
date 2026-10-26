@@ -4,6 +4,9 @@ name: Upload Build to S3
 on:
   workflow_call:
     inputs:
+      deploy_env:
+        required: true
+        type: string
       s3_bucket:
         required: true
         type: string
@@ -17,6 +20,12 @@ on:
         required: true
         type: string
 
+    secrets:
+      DISCORD_WEBHOOK_DEV:
+        required: false
+      DISCORD_WEBHOOK_PROD:
+        required: false
+
 jobs:
   deploy:
     runs-on: self-hosted
@@ -24,6 +33,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Load S3 cache policy
         id: cache_policy
         shell: bash
@@ -97,16 +107,25 @@ jobs:
       - name: Upload Build.loader.js
         env:
           CACHE_CONTROL: ${{ steps.cache_policy.outputs.loader_cache }}
+          S3_BUCKET: ${{ inputs.s3_bucket }}
+          S3_FOLDER: ${{ inputs.s3_folder }}
+        shell: bash
         run: |
+          set -euo pipefail
           aws s3 cp Build/Build.loader.js \
-            "s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.loader.js" \
+            "s3://${S3_BUCKET}/${S3_FOLDER}/Build/Build.loader.js" \
             --cache-control "$CACHE_CONTROL" \
             --content-type "application/javascript"
 
       - name: Upload Build.framework.js.unityweb
+        env:
+          S3_BUCKET: ${{ inputs.s3_bucket }}
+          S3_FOLDER: ${{ inputs.s3_folder }}
+        shell: bash
         run: |
+          set -euo pipefail
           aws s3 cp Build/Build.framework.js.unityweb \
-            "s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.framework.js.unityweb" \
+            "s3://${S3_BUCKET}/${S3_FOLDER}/Build/Build.framework.js.unityweb" \
             --cache-control "public, max-age=0, must-revalidate, s-maxage=86400" \
             --content-type "application/javascript" \
             --content-encoding br
@@ -114,9 +133,13 @@ jobs:
       - name: Upload Build.data.unityweb
         env:
           CACHE_CONTROL: ${{ steps.cache_policy.outputs.data_cache }}
+          S3_BUCKET: ${{ inputs.s3_bucket }}
+          S3_FOLDER: ${{ inputs.s3_folder }}
+        shell: bash
         run: |
+          set -euo pipefail
           aws s3 cp Build/Build.data.unityweb \
-            "s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.data.unityweb" \
+            "s3://${S3_BUCKET}/${S3_FOLDER}/Build/Build.data.unityweb" \
             --cache-control "$CACHE_CONTROL" \
             --content-type "application/octet-stream" \
             --content-encoding br
@@ -124,17 +147,26 @@ jobs:
       - name: Upload Build.wasm.unityweb
         env:
           CACHE_CONTROL: ${{ steps.cache_policy.outputs.wasm_cache }}
+          S3_BUCKET: ${{ inputs.s3_bucket }}
+          S3_FOLDER: ${{ inputs.s3_folder }}
+        shell: bash
         run: |
+          set -euo pipefail
           aws s3 cp Build/Build.wasm.unityweb \
-            "s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/Build/Build.wasm.unityweb" \
+            "s3://${S3_BUCKET}/${S3_FOLDER}/Build/Build.wasm.unityweb" \
             --cache-control "$CACHE_CONTROL" \
             --content-type "application/wasm" \
             --content-encoding br
 
       - name: Upload index.html
+        env:
+          S3_BUCKET: ${{ inputs.s3_bucket }}
+          S3_FOLDER: ${{ inputs.s3_folder }}
+        shell: bash
         run: |
+          set -euo pipefail
           aws s3 cp index.html \
-            "s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/index.html" \
+            "s3://${S3_BUCKET}/${S3_FOLDER}/index.html" \
             --cache-control "no-cache" \
             --content-type "text/html"
 
@@ -150,9 +182,14 @@ jobs:
 
       - name: Upload StreamingAssets folder
         if: steps.check_streaming_assets.outputs.exists == 'true'
+        env:
+          S3_BUCKET: ${{ inputs.s3_bucket }}
+          S3_FOLDER: ${{ inputs.s3_folder }}
+        shell: bash
         run: |
+          set -euo pipefail
           aws s3 sync StreamingAssets/ \
-            "s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/StreamingAssets/" \
+            "s3://${S3_BUCKET}/${S3_FOLDER}/StreamingAssets/" \
             --cache-control "public, max-age=0, must-revalidate, s-maxage=86400"
 
       - name: Check if TemplateData exists
@@ -167,9 +204,14 @@ jobs:
 
       - name: Upload TemplateData folder
         if: steps.check_template_data.outputs.exists == 'true'
+        env:
+          S3_BUCKET: ${{ inputs.s3_bucket }}
+          S3_FOLDER: ${{ inputs.s3_folder }}
+        shell: bash
         run: |
+          set -euo pipefail
           aws s3 sync TemplateData/ \
-            "s3://${{ inputs.s3_bucket }}/${{ inputs.s3_folder }}/TemplateData/" \
+            "s3://${S3_BUCKET}/${S3_FOLDER}/TemplateData/" \
             --cache-control "public, max-age=0, must-revalidate, s-maxage=86400"
 
       - name: Update version.json
@@ -203,8 +245,6 @@ jobs:
             echo "No version.json found. Starting at $NEW_VERSION"
           fi
 
-          echo "New version: $NEW_VERSION"
-
           printf '{\n    "version": "%s"\n}\n' "$NEW_VERSION" > "$VERSION_FILE"
 
           aws s3 cp "$VERSION_FILE" "$S3_VERSION_PATH" \
@@ -215,64 +255,88 @@ jobs:
           echo "version.json updated to $NEW_VERSION"
 
       - name: CloudFront Invalidation
+        env:
+          DISTRIBUTION_ID: ${{ inputs.cloudfront_distribution_id }}
+          INVALIDATE_PATHS: ${{ inputs.invalidate_paths }}
+        shell: bash
         run: |
+          set -euo pipefail
           aws cloudfront create-invalidation \
-            --distribution-id "${{ inputs.cloudfront_distribution_id }}" \
-            --paths ${{ inputs.invalidate_paths }}
+            --distribution-id "$DISTRIBUTION_ID" \
+            --paths "$INVALIDATE_PATHS"
 
-      # Original Discord notification design preserved.
       - name: Discord Notification
         if: always()
+        env:
+          DEPLOY_ENV: ${{ inputs.deploy_env }}
+          DISCORD_WEBHOOK_DEV: ${{ secrets.DISCORD_WEBHOOK_DEV }}
+          DISCORD_WEBHOOK_PROD: ${{ secrets.DISCORD_WEBHOOK_PROD }}
+          S3_BUCKET: ${{ inputs.s3_bucket }}
+          S3_FOLDER: ${{ inputs.s3_folder }}
+          CLOUDFRONT_ID: ${{ inputs.cloudfront_distribution_id }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
         run: |
-          STATUS="${{ job.status }}"
+          set -euo pipefail
 
-          COLOR=3066993
-          TITLE="✅ S3 Upload Successful"
+          case "$DEPLOY_ENV" in
+            dev)
+              WEBHOOK="$DISCORD_WEBHOOK_DEV"
+              ENVIRONMENT="Development"
+              ;;
+            prod)
+              WEBHOOK="$DISCORD_WEBHOOK_PROD"
+              ENVIRONMENT="Production"
+              ;;
+            *)
+              echo "Invalid deploy_env: $DEPLOY_ENV"
+              exit 1
+              ;;
+          esac
 
-          if [ "$STATUS" != "success" ]; then
-            COLOR=15158332
-            TITLE="❌ S3 Upload Failed"
+          if [ -z "$WEBHOOK" ]; then
+            echo "Discord webhook is missing for $ENVIRONMENT."
+            exit 1
           fi
 
-          WEBHOOKS=(
-            "${{ secrets.DISCORD_WEBHOOK_1 }}"
-            "${{ secrets.DISCORD_WEBHOOK_2 }}"
-          )
+          COLOR=3066993
+          TITLE="✅ $ENVIRONMENT S3 Upload Successful"
 
-          for WEBHOOK in "${WEBHOOKS[@]}"; do
-            [ -z "$WEBHOOK" ] && continue
+          if [ "$JOB_STATUS" != "success" ]; then
+            COLOR=15158332
+            TITLE="❌ $ENVIRONMENT S3 Upload Failed"
+          fi
 
-            curl --fail \
-              -H "Content-Type: application/json" \
-              -X POST \
-              -d "{
-                \"username\": \"Deploy Bot\",
-                \"embeds\": [{
-                  \"title\": \"$TITLE\",
-                  \"color\": $COLOR,
-                  \"fields\": [
-                    {
-                      \"name\": \"S3 Bucket\",
-                      \"value\": \"${{ inputs.s3_bucket }}\"
-                    },
-                    {
-                      \"name\": \"S3 Folder\",
-                      \"value\": \"${{ inputs.s3_folder }}\"
-                    },
-                    {
-                      \"name\": \"CloudFront ID\",
-                      \"value\": \"${{ inputs.cloudfront_distribution_id }}\"
-                    },
-                    {
-                      \"name\": \"Triggered By\",
-                      \"value\": \"${{ github.actor }}\"
-                    },
-                    {
-                      \"name\": \"Workflow\",
-                      \"value\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
-                    }
-                  ]
-                }]
-              }" \
-              "$WEBHOOK"
-          done
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg environment "$ENVIRONMENT" \
+            --arg bucket "$S3_BUCKET" \
+            --arg folder "$S3_FOLDER" \
+            --arg distribution "$CLOUDFRONT_ID" \
+            --arg actor "$ACTOR" \
+            --arg workflow "https://github.com/$REPOSITORY/actions/runs/$RUN_ID" \
+            --argjson color "$COLOR" \
+            '{
+              username: "Deploy Bot",
+              embeds: [{
+                title: $title,
+                color: $color,
+                fields: [
+                  {name: "Environment", value: $environment},
+                  {name: "S3 Bucket", value: $bucket},
+                  {name: "S3 Folder", value: $folder},
+                  {name: "CloudFront ID", value: $distribution},
+                  {name: "Triggered By", value: $actor},
+                  {name: "Workflow", value: $workflow}
+                ]
+              }]
+            }')
+
+          curl --fail --silent --show-error \
+            -H "Content-Type: application/json" \
+            -X POST \
+            -d "$PAYLOAD" \
+            "$WEBHOOK"
