@@ -305,54 +305,89 @@ jobs:
             exit 1
           fi
 
-          # For manual runs, get the commit subject from the checked-out commit.
           if [ -z "$COMMIT_MESSAGE" ]; then
             COMMIT_MESSAGE=$(git log -1 --format=%s "$COMMIT_SHA" 2>/dev/null || true)
           fi
 
-          if [ -z "$COMMIT_MESSAGE" ]; then
-            COMMIT_MESSAGE="Commit message unavailable"
-          fi
-
+          COMMIT_MESSAGE="${COMMIT_MESSAGE:-Commit message unavailable}"
           SHORT_SHA="${COMMIT_SHA:0:7}"
           COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
+          WORKFLOW_URL="https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}"
 
-          COLOR=3066993
-          TITLE="✅ $ENVIRONMENT S3 Upload Successful"
-
-          if [ "$JOB_STATUS" != "success" ]; then
-            COLOR=15158332
-            TITLE="❌ $ENVIRONMENT S3 Upload Failed"
+          if [ "$JOB_STATUS" = "success" ]; then
+            COLOR=5763719
+            TITLE="✅ ${ENVIRONMENT} Deployment Successful"
+            STATUS_TEXT="🟢 Upload completed successfully"
+          else
+            COLOR=15548997
+            TITLE="❌ ${ENVIRONMENT} Deployment Failed"
+            STATUS_TEXT="🔴 Upload failed"
           fi
 
           PAYLOAD=$(jq -n \
             --arg title "$TITLE" \
-            --arg environment "$ENVIRONMENT" \
+            --arg status "$STATUS_TEXT" \
             --arg branch "$BRANCH" \
-            --arg commit_id "[$SHORT_SHA]($COMMIT_URL)" \
-            --arg commit_message "$COMMIT_MESSAGE" \
+            --arg commit "[$SHORT_SHA]($COMMIT_URL)" \
+            --arg message "${COMMIT_MESSAGE:0:1000}" \
+            --arg environment "$ENVIRONMENT" \
+            --arg actor "$ACTOR" \
             --arg bucket "$S3_BUCKET" \
             --arg folder "$S3_FOLDER" \
             --arg distribution "$CLOUDFRONT_ID" \
-            --arg actor "$ACTOR" \
-            --arg workflow "https://github.com/$REPOSITORY/actions/runs/$RUN_ID" \
+            --arg workflow "$WORKFLOW_URL" \
             --argjson color "$COLOR" \
             '{
               username: "Deploy Bot",
               embeds: [{
                 title: $title,
+                description: $status,
                 color: $color,
                 fields: [
-                  {name: "Environment", value: $environment},
-                  {name: "Branch", value: $branch},
-                  {name: "Commit ID", value: $commit_id},
-                  {name: "Commit Message", value: ($commit_message | .[0:1000])},
-                  {name: "S3 Bucket", value: $bucket},
-                  {name: "S3 Folder", value: $folder},
-                  {name: "CloudFront ID", value: $distribution},
-                  {name: "Triggered By", value: $actor},
-                  {name: "Workflow", value: $workflow}
-                ]
+                  {
+                    name: "Git Information",
+                    value: ("**BRANCH**\n`" + $branch + "`\n\n**COMMIT ID**\n" + $commit + "\n\n**COMMIT MESSAGE**\n" + $message),
+                    inline: false
+                  },
+                  {
+                    name: "Environment",
+                    value: $environment,
+                    inline: true
+                  },
+                  {
+                    name: "Triggered By",
+                    value: $actor,
+                    inline: true
+                  },
+                  {
+                    name: "S3 Bucket",
+                    value: ("`" + $bucket + "`"),
+                    inline: true
+                  },
+                  {
+                    name: "S3 Folder",
+                    value: ("`" + $folder + "`"),
+                    inline: true
+                  },
+                  {
+                    name: "CloudFront ID",
+                    value: ("`" + $distribution + "`"),
+                    inline: true
+                  },
+                  {
+                    name: "Status",
+                    value: $status,
+                    inline: true
+                  },
+                  {
+                    name: "GitHub Actions",
+                    value: ("[View workflow run →](" + $workflow + ")"),
+                    inline: false
+                  }
+                ],
+                footer: {
+                  text: "Automated notification • Deploy Bot"
+                }
               }]
             }')
 
