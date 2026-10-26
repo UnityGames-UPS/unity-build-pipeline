@@ -277,6 +277,9 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title || '' }}
           JOB_STATUS: ${{ job.status }}
         shell: bash
         run: |
@@ -302,6 +305,18 @@ jobs:
             exit 1
           fi
 
+          # For manual runs, get the commit subject from the checked-out commit.
+          if [ -z "$COMMIT_MESSAGE" ]; then
+            COMMIT_MESSAGE=$(git log -1 --format=%s "$COMMIT_SHA" 2>/dev/null || true)
+          fi
+
+          if [ -z "$COMMIT_MESSAGE" ]; then
+            COMMIT_MESSAGE="Commit message unavailable"
+          fi
+
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          COMMIT_URL="https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}"
+
           COLOR=3066993
           TITLE="✅ $ENVIRONMENT S3 Upload Successful"
 
@@ -313,6 +328,9 @@ jobs:
           PAYLOAD=$(jq -n \
             --arg title "$TITLE" \
             --arg environment "$ENVIRONMENT" \
+            --arg branch "$BRANCH" \
+            --arg commit_id "[$SHORT_SHA]($COMMIT_URL)" \
+            --arg commit_message "$COMMIT_MESSAGE" \
             --arg bucket "$S3_BUCKET" \
             --arg folder "$S3_FOLDER" \
             --arg distribution "$CLOUDFRONT_ID" \
@@ -326,6 +344,9 @@ jobs:
                 color: $color,
                 fields: [
                   {name: "Environment", value: $environment},
+                  {name: "Branch", value: $branch},
+                  {name: "Commit ID", value: $commit_id},
+                  {name: "Commit Message", value: ($commit_message | .[0:1000])},
                   {name: "S3 Bucket", value: $bucket},
                   {name: "S3 Folder", value: $folder},
                   {name: "CloudFront ID", value: $distribution},
