@@ -1,12 +1,8 @@
-
 name: Upload Build to S3
 
 on:
   workflow_call:
     inputs:
-      deploy_env:
-        required: true
-        type: string
       s3_bucket:
         required: true
         type: string
@@ -268,7 +264,6 @@ jobs:
       - name: Discord Notification
         if: always()
         env:
-          DEPLOY_ENV: ${{ inputs.deploy_env }}
           DISCORD_WEBHOOK_DEV: ${{ secrets.DISCORD_WEBHOOK_DEV }}
           DISCORD_WEBHOOK_PROD: ${{ secrets.DISCORD_WEBHOOK_PROD }}
           S3_BUCKET: ${{ inputs.s3_bucket }}
@@ -284,19 +279,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          case "$DEPLOY_ENV" in
-            dev)
+          
+          case "$BRANCH" in
+            dev-build|B2B-DevBuild)
               WEBHOOK="$DISCORD_WEBHOOK_DEV"
               ENVIRONMENT="Development"
               ;;
-            prod)
+            main)
               WEBHOOK="$DISCORD_WEBHOOK_PROD"
               ENVIRONMENT="Production"
               ;;
             *)
-              echo "Invalid deploy_env: $DEPLOY_ENV"
-              exit 1
+              echo "::warning::No Discord webhook mapped for branch '$BRANCH'. Skipping notification."
+              exit 0
               ;;
           esac
 
