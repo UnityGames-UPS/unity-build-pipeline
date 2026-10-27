@@ -175,7 +175,7 @@ jobs:
           set -euo pipefail
 
           case "$DEPLOY_ENV" in
-            dev)
+            dev-build|B2B-DevBuild
               WEBHOOK="$DISCORD_WEBHOOK_DEV"
               ENVIRONMENT="Development"
               ;;
