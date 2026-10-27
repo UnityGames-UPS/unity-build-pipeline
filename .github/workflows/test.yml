@@ -30,30 +30,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Resolve environment
-        id: resolve_env
-        shell: bash
-        env:
-          BRANCH: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-
-          case "$BRANCH" in
-            main)
-              ENV="prod"
-              ;;
-            dev-build)
-              ENV="dev"
-              ;;
-            *)
-              echo "No environment mapping for branch '$BRANCH'"
-              exit 1
-              ;;
-          esac
-
-          echo "Using environment: $ENV"
-          echo "deploy_env=$ENV" >> "$GITHUB_OUTPUT"
-
       - name: Load S3 cache policy
         id: cache_policy
         shell: bash
@@ -288,7 +264,6 @@ jobs:
       - name: Discord Notification
         if: always()
         env:
-          DEPLOY_ENV: ${{ steps.resolve_env.outputs.deploy_env }} 
           DISCORD_WEBHOOK_DEV: ${{ secrets.DISCORD_WEBHOOK_DEV }}
           DISCORD_WEBHOOK_PROD: ${{ secrets.DISCORD_WEBHOOK_PROD }}
           S3_BUCKET: ${{ inputs.s3_bucket }}
@@ -304,19 +279,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          case "$DEPLOY_ENV" in
-            dev)
+          
+          case "$BRANCH" in
+            dev-build)
               WEBHOOK="$DISCORD_WEBHOOK_DEV"
               ENVIRONMENT="Development"
               ;;
-            prod)
+            main)
               WEBHOOK="$DISCORD_WEBHOOK_PROD"
               ENVIRONMENT="Production"
               ;;
             *)
-              echo "Invalid deploy_env: $DEPLOY_ENV"
-              exit 1
+              echo "::warning::No Discord webhook mapped for branch '$BRANCH'. Skipping notification."
+              exit 0
               ;;
           esac
 
